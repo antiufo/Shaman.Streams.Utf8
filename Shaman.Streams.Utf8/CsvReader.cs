@@ -32,7 +32,7 @@ namespace Shaman.Runtime
         {
             return ReadLine().Select(x => x.ToString()).ToArray();
         }
-
+        public byte Separator { get; set; } = (byte)',';
         public Utf8String[] ReadLine()
         {
             if (reader.IsCompleted) return null;
@@ -43,7 +43,7 @@ namespace Shaman.Runtime
             var num = 0;
             while (true)
             {
-                var idx = line.IndexOf(',');
+                var idx = line.IndexOf(Separator);
                 var val = idx == -1 ? line : line.Substring(0, idx);
 
                 if (val.Length > 0 && val[0] == (byte)'"')
