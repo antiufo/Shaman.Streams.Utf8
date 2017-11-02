@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -12,28 +13,30 @@ namespace Shaman.Runtime
     public static class Utf8StringExtensions
     {
 
-        public static Utf8String[] Split(this Utf8String this_, byte ch)
+        public static Utf8SpanArray Split(this Utf8Span this_, byte ch)
         {
             return Split(this_, ch, StringSplitOptions.None);
         }
 
-        public static Utf8String[] Split(this Utf8String this_, byte ch, StringSplitOptions options)
+        public static Utf8SpanArray Split(this Utf8Span this_, byte ch, StringSplitOptions options)
         {
-            Utf8String[] result = null;
+            var result = default(Utf8SpanArray);
             Split(this_, ch, options, ref result);
             return result;
         }
 
-        public static void Split(this Utf8String this_, byte ch, StringSplitOptions options, ref Utf8String[] arr)
+        public static void Split(this Utf8Span this_, byte ch, StringSplitOptions options, ref Utf8SpanArray arr)
         {
+            arr.data1 = this_;
             var removeEmpty = (options & StringSplitOptions.RemoveEmptyEntries) != 0;
+            /*
             var count = 0;
             if (removeEmpty)
             {
                 var prevWasSplit = true;
-                for (int i = 0; i < this_.Length; i++)
+                for (int i = 0; i < this_.Length(); i++)
                 {
-                    if (this_[i] == ch)
+                    if (this_.CharAt(i) == ch)
                     {
                         prevWasSplit = true;
                     }
@@ -48,27 +51,28 @@ namespace Shaman.Runtime
             else
             {
                 count++;
-                for (int i = 0; i < this_.Length; i++)
+                for (int i = 0; i < this_.Length(); i++)
                 {
-                    if (this_[i] == ch)
+                    if (this_.CharAt(i) == ch)
                     {
                         count++;
                     }
                 }
             }
-            if (count == 0) { arr = EmptyUtf8StringArray; return; }
-            if (arr == null || arr.Length != count) arr = new Utf8String[count];
+            if (count == 0) { arr = default(Utf8SplitResult); return; }
+            */
             var index = 0;
             var pos = 0;
-            while (index < count)
+            arr.count = 0;
+            while (true)
             {
                 var idx = this_.Substring(pos).IndexOf(ch);
-                if (idx == -1) Debug.Assert(index == count - 1);
+                if (idx == -1) break;
                 else idx += pos;
-                var length = idx != -1 ? idx - pos : this_.Length - pos;
+                var length = idx != -1 ? idx - pos : this_.Length() - pos;
                 if (!removeEmpty || length != 0)
                 {
-                    arr[index] = this_.Substring(pos, length);
+                    arr.Add(pos, length);
                     index++;
                 }
                 pos = idx + 1;
@@ -92,24 +96,38 @@ namespace Shaman.Runtime
             return k != -1 ? start + k : -1;
         }
 
-        public static Utf8String CaptureBetween(this Utf8String str, Utf8String before, Utf8String after)
+        public static Utf8Span CaptureBetween(this Utf8Span str, Utf8Span before, Utf8Span after)
         {
             var start = str.IndexOf(before);
             if (start == -1) throw new InvalidDataException();
-            str = str.Substring(start + before.Length);
+            str = str.Substring(start + before.Length());
             var end = str.IndexOf(after);
             if (end == -1) throw new InvalidDataException();
             return str.Substring(0, end);
         }
 
+        public static Span<T> Slice<T>(this T[] arr, int start)
+        {
+            return new Span<T>(arr, start, arr.Length - start);
+        }
 
-        public static Utf8String? TryCaptureBetween(this Utf8String str, Utf8String before, Utf8String after)
+        public static Span<T> Slice<T>(this T[] arr, int start, int length)
+        {
+            return new Span<T>(arr, start, length);
+        }
+
+        public static byte CharAt(this Utf8Span str, int index) => str.Bytes[index];
+        public static int Length(this Utf8Span str) => str.Bytes.Length;
+        public static byte CharAt(this Utf8String str, int index) => str.Bytes[index];
+        public static int Length(this Utf8String str) => str.Bytes.Length;
+
+        public static Utf8Span TryCaptureBetween(this Utf8Span str, Utf8Span before, Utf8Span after)
         {
             var start = str.IndexOf(before);
-            if (start == -1) return null;
-            str = str.Substring(start + before.Length);
+            if (start == -1) return Utf8Span.Empty;
+            str = str.Substring(start + before.Length());
             var end = str.IndexOf(after);
-            if (end == -1) return null;
+            if (end == -1) return Utf8Span.Empty;
             return str.Substring(0, end);
         }
 
@@ -117,7 +135,7 @@ namespace Shaman.Runtime
 
 
 
-        public static Utf8String CaptureBetween(this Utf8String str, byte before, byte after)
+        public static Utf8Span CaptureBetween(this Utf8Span str, byte before, byte after)
         {
             var start = str.IndexOf(before);
             if (start == -1) throw new InvalidDataException();
@@ -128,13 +146,13 @@ namespace Shaman.Runtime
         }
 
 
-        public static Utf8String? TryCaptureBetween(this Utf8String str, byte before, byte after)
+        public static Utf8Span TryCaptureBetween(this Utf8Span str, byte before, byte after)
         {
             var start = str.IndexOf(before);
-            if (start == -1) return null;
+            if (start == -1) return Utf8Span.Empty;
             str = str.Substring(start + 1);
             var end = str.IndexOf(after);
-            if (end == -1) return null;
+            if (end == -1) return Utf8Span.Empty;
             return str.Substring(0, end);
         }
 
@@ -143,14 +161,14 @@ namespace Shaman.Runtime
 
 
 
-        public static Utf8String CaptureAfter(this Utf8String str, Utf8String prefix)
+        public static Utf8Span CaptureAfter(this Utf8Span str, Utf8Span prefix)
         {
             var start = str.IndexOf(prefix);
             if (start == -1) throw new InvalidDataException();
-            return str.Substring(start + prefix.Length);
+            return str.Substring(start + prefix.Length());
         }
 
-        public static Utf8String CaptureBefore(this Utf8String str, Utf8String suffix)
+        public static Utf8Span CaptureBefore(this Utf8Span str, Utf8Span suffix)
         {
             var end = str.IndexOf(suffix);
             if (end == -1) throw new InvalidDataException();
@@ -160,14 +178,14 @@ namespace Shaman.Runtime
 
 
 
-        public static Utf8String CaptureAfter(this Utf8String str, byte prefix)
+        public static Utf8Span CaptureAfter(this Utf8Span str, byte prefix)
         {
             var start = str.IndexOf(prefix);
             if (start == -1) throw new InvalidDataException();
             return str.Substring(start + 1);
         }
 
-        public static Utf8String CaptureBefore(this Utf8String str, byte suffix)
+        public static Utf8Span CaptureBefore(this Utf8Span str, byte suffix)
         {
             var end = str.IndexOf(suffix);
             if (end == -1) throw new InvalidDataException();
@@ -176,32 +194,32 @@ namespace Shaman.Runtime
 
 
 
-        public static Utf8String? TryCaptureAfter(this Utf8String str, Utf8String prefix)
+        public static Utf8Span TryCaptureAfter(this Utf8Span str, Utf8Span prefix)
         {
             var start = str.IndexOf(prefix);
-            if (start == -1) return null;
-            return str.Substring(start + prefix.Length);
+            if (start == -1) return Utf8Span.Empty;
+            return str.Substring(start + prefix.Length());
         }
 
-        public static Utf8String? TryCaptureBefore(this Utf8String str, Utf8String suffix)
+        public static Utf8Span TryCaptureBefore(this Utf8Span str, Utf8Span suffix)
         {
             var end = str.IndexOf(suffix);
-            if (end == -1) return null;
+            if (end == -1) return Utf8Span.Empty;
             return str.Substring(0, end);
         }
 
 
-        public static Utf8String? TryCaptureAfter(this Utf8String str, byte prefix)
+        public static Utf8Span TryCaptureAfter(this Utf8Span str, byte prefix)
         {
             var start = str.IndexOf(prefix);
-            if (start == -1) return null;
+            if (start == -1) return Utf8Span.Empty;
             return str.Substring(start + 1);
         }
 
-        public static Utf8String? TryCaptureBefore(this Utf8String str, byte suffix)
+        public static Utf8Span TryCaptureBefore(this Utf8Span str, byte suffix)
         {
             var end = str.IndexOf(suffix);
-            if (end == -1) return null;
+            if (end == -1) return Utf8Span.Empty;
             return str.Substring(0, end);
         }
 
@@ -209,61 +227,30 @@ namespace Shaman.Runtime
     
     public static class Utf8Utils
     {
-        public static int ParseInt32(Utf8String str)
+        public static int ParseInt32(Utf8Span str)
         {
-            if (!PrimitiveParser.TryParseInt32(str, out var value, out var consumed)) throw new FormatException();
-            if (consumed != str.Length) throw new FormatException();
+            if (!Utf8Parser.TryParseInt32(str, out var value, out var consumed)) throw new FormatException();
+            if (consumed != str.Length()) throw new FormatException();
             return value;
         }
-        public static long ParseInt64(Utf8String str)
+        public static long ParseInt64(Utf8Span str)
         {
-            if (!PrimitiveParser.TryParseInt64(str, out var value, out var consumed)) throw new FormatException();
-            if (consumed != str.Length) throw new FormatException();
-            return value;
-        }
-        
-        
-
-        public static bool TryParseInt32(Utf8String str, out int val)
-        {
-            if (!PrimitiveParser.TryParseInt32(str, out val, out var consumed) || consumed != str.Length) return false;
-            return true;
-        }
-        
-        public static bool TryParseInt64(Utf8String str, out long val)
-        {
-            if (!PrimitiveParser.TryParseInt64(str, out val, out var consumed) || consumed != str.Length) return false;
-            return true;
-        }
-        
-        
-        
-        
-
-        public static uint ParseUInt32(Utf8String str)
-        {
-            if (!PrimitiveParser.TryParseUInt32(str, out var value, out var consumed)) throw new FormatException();
-            if (consumed != str.Length) throw new FormatException();
-            return value;
-        }
-        public static ulong ParseUInt64(Utf8String str)
-        {
-            if (!PrimitiveParser.TryParseUInt64(str, out var value, out var consumed)) throw new FormatException();
-            if (consumed != str.Length) throw new FormatException();
+            if (!Utf8Parser.TryParseInt64(str, out var value, out var consumed)) throw new FormatException();
+            if (consumed != str.Length()) throw new FormatException();
             return value;
         }
         
         
 
-        public static bool TryParseUInt32(Utf8String str, out uint val)
+        public static bool TryParseInt32(Utf8Span str, out int val)
         {
-            if (!PrimitiveParser.TryParseUInt32(str, out val, out var consumed) || consumed != str.Length) return false;
+            if (!Utf8Parser.TryParseInt32(str, out val, out var consumed) || consumed != str.Length()) return false;
             return true;
         }
         
-        public static bool TryParseUInt64(Utf8String str, out ulong val)
+        public static bool TryParseInt64(Utf8Span str, out long val)
         {
-            if (!PrimitiveParser.TryParseUInt64(str, out val, out var consumed) || consumed != str.Length) return false;
+            if (!Utf8Parser.TryParseInt64(str, out val, out var consumed) || consumed != str.Length()) return false;
             return true;
         }
         
@@ -271,9 +258,40 @@ namespace Shaman.Runtime
         
         
 
-        public static DateTime ParseDateConcatenated(Utf8String date)
+        public static uint ParseUInt32(Utf8Span str)
         {
-            if(date.Length != 14) throw new FormatException();
+            if (!Utf8Parser.TryParseUInt32(str, out var value, out var consumed)) throw new FormatException();
+            if (consumed != str.Length()) throw new FormatException();
+            return value;
+        }
+        public static ulong ParseUInt64(Utf8Span str)
+        {
+            if (!Utf8Parser.TryParseUInt64(str.Bytes, out var value, out var consumed)) throw new FormatException();
+            if (consumed != str.Length()) throw new FormatException();
+            return value;
+        }
+        
+        
+
+        public static bool TryParseUInt32(Utf8Span str, out uint val)
+        {
+            if (!Utf8Parser.TryParseUInt32(str, out val, out var consumed) || consumed != str.Length()) return false;
+            return true;
+        }
+        
+        public static bool TryParseUInt64(Utf8Span str, out ulong val)
+        {
+            if (!Utf8Parser.TryParseUInt64(str, out val, out var consumed) || consumed != str.Length()) return false;
+            return true;
+        }
+        
+        
+        
+        
+
+        public static DateTime ParseDateConcatenated(Utf8Span date)
+        {
+            if(date.Length() != 14) throw new FormatException();
             return new DateTime(
                 ParseInt32(date.Substring(0, 4)),
                 ParseInt32(date.Substring(4, 2)),
@@ -285,9 +303,9 @@ namespace Shaman.Runtime
                 );
         }
         
-        public static DateTime ParseDateSeparated(Utf8String date)
+        public static DateTime ParseDateSeparated(Utf8Span date)
         {
-            if(date.Length != 19) throw new FormatException();
+            if(date.Length() != 19) throw new FormatException();
             return new DateTime(
                 ParseInt32(date.Substring(0, 4)),
                 ParseInt32(date.Substring(5, 2)),
@@ -299,7 +317,7 @@ namespace Shaman.Runtime
                 );
         }
         
-        public static Utf8String ReadTo(ref Utf8String str, byte end)
+        public static Utf8Span ReadTo(ref Utf8Span str, byte end)
         {
             var idx = str.IndexOf(end);
             if (idx == -1) throw new FormatException();
@@ -309,7 +327,7 @@ namespace Shaman.Runtime
             return v;
         }
         
-        public static int ParseInt32To(ref Utf8String str, byte end)
+        public static int ParseInt32To(ref Utf8Span str, byte end)
         {
             return ParseInt32(ReadTo(ref str, end));
         }

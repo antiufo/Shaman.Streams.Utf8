@@ -62,22 +62,22 @@ namespace Shaman.Runtime
         private int bufferDataLength;
 
         private readonly static Utf8String[] LF = new Utf8String[] { (Utf8String)"\n" };
-        public Utf8String ReadLine()
+        public Utf8Span ReadLine()
         {
             int dummy;
             var line = ReadTo(LF, out dummy);
-            if (line.Length != 0 && line[line.Length - 1] == 13)
-                line = line.Substring(0, line.Length - 1);
+            if (!line.IsEmpty && line.CharAt(line.Length() - 1) == 13)
+                line = line.Substring(0, line.Length() - 1);
             return line;
         }
 
-        public Utf8String ReadTo(Utf8String separator)
+        public Utf8Span ReadTo(Utf8String separator)
         {
             singleStringArray[0] = separator;
             return ReadTo(singleStringArray, out var dummy);
         }
 
-        private Utf8String[] singleStringArray = new Utf8String[1] { default(Utf8String) };
+        private Utf8String[] singleStringArray = new Utf8String[1] { Utf8String.Empty };
         private bool hasPendingEmptyString;
 
         public ArraySegment<byte> Read(int maxSize)
@@ -142,7 +142,7 @@ namespace Shaman.Runtime
 
         public ReadOnlySpan<byte> RemainingBufferedData => buffer.Slice(bufferStart, bufferDataLength - bufferStart);
 
-        public Utf8String ReadTo(Utf8String[] separator, out int foundSeparator)
+        public Utf8Span ReadTo(Utf8String[] separator, out int foundSeparator)
         {
             tryagain:
             if (isCompleted) throw new EndOfStreamException();
@@ -150,16 +150,16 @@ namespace Shaman.Runtime
             {
                 foundSeparator = -1;
                 isCompleted = true;
-                return Utf8String.Empty;
+                return Utf8Span.Empty;
             }
-            var bufferview = new Utf8String(buffer);
+            var bufferview = new Utf8Span(buffer);
 
-            var haystack = new Utf8String(buffer, bufferStart, bufferDataLength - bufferStart);
+            var haystack = new Utf8Span(buffer.Slice(bufferStart, bufferDataLength - bufferStart));
             var lf = FindSeparator(haystack, separator, out foundSeparator);
             if (lf != -1)
             {
-                var u = new Utf8String(buffer, bufferStart, lf);
-                var delta = lf + separator[foundSeparator].Length;
+                var u = new Utf8Span(buffer.Slice(bufferStart, lf));
+                var delta = lf + separator[foundSeparator].Length();
                 position += delta;
                 bufferStart += delta;
                 hasPendingEmptyString = isEndOfStream && bufferStart == bufferDataLength;
@@ -174,33 +174,33 @@ namespace Shaman.Runtime
                     foundSeparator = -1;
                     var delta = bufferDataLength - bufferStart;
                     position += delta;
-                    return new Utf8String(buffer, bufferStart, delta);
+                    return new Utf8Span(buffer.Slice(bufferStart, delta));
                 }
                 var tocopy = bufferFullSize - bufferStart;
                 Array.Copy(buffer, bufferFullSize - tocopy, buffer, bufferHalfSize - tocopy, tocopy);
                 FillBuffer();
 
                 var start = bufferHalfSize - tocopy;
-                haystack = new Utf8String(buffer, start, bufferDataLength - start);
+                haystack = new Utf8Span(buffer.Slice(start, bufferDataLength - start));
                 lf = FindSeparator(haystack, separator, out foundSeparator);
 
                 if (lf != -1)
                 {
-                    var delta = lf + separator[foundSeparator].Length;
+                    var delta = lf + separator[foundSeparator].Length();
                     position += delta;
                     bufferStart = start + delta;
-                    var u = new Utf8String(buffer, start, lf);
+                    var u = new Utf8Span(buffer.Slice(start, lf));
                     hasPendingEmptyString = isEndOfStream && bufferStart == bufferDataLength;
                     
                     return u;
                 }
                 else
                 {
-                    var u = new Utf8String(buffer, start, bufferDataLength - start);
+                    var u = new Utf8Span(buffer.Slice(start, bufferDataLength - start));
                     if (isEndOfStream)
                     {
                         isCompleted = true;
-                        position += u.Length;
+                        position += u.Length();
                         return u;
                     }
                     else
@@ -209,7 +209,7 @@ namespace Shaman.Runtime
                         var newbuffer = new byte[bufferFullSize * 2];
                         var datalength = bufferDataLength - bufferHalfSize + tocopy;
                         Array.Copy(buffer, start, newbuffer, bufferFullSize, datalength);
-                        var newview = new Utf8String(newbuffer);
+                        var newview = new Utf8Span(newbuffer);
                         bufferDataLength = bufferFullSize + datalength;
                         bufferFullSize *= 2;
                         bufferHalfSize *= 2;
@@ -226,24 +226,24 @@ namespace Shaman.Runtime
 
         }
 /*
-        internal static bool IsWhiteSpace(Utf8String str)
+        internal static bool IsWhiteSpace(Utf8Span str)
         {
             str.Trim()
             if (str.Length == 0) return true;
             for (int i = 0; i < str.Length; i++)
             {
-                if (Utf8String.IsWhiteSpace(str[i])) return false;
+                if (Utf8Span.IsWhiteSpace(str[i])) return false;
             }
             return true;
         }
         */
-        private unsafe int FindSeparator(Utf8String haystack, Utf8String[] separator, out int foundSeparator)
+        private unsafe int FindSeparator(Utf8Span haystack, Utf8String[] separator, out int foundSeparator)
         {
             foundSeparator = 0;
             if (separator.Length == 1)
             {
                 var sep = separator[0];
-                if (sep.Length == 1) return haystack.IndexOf(sep[0]);
+                if (sep.Length() == 1) return haystack.IndexOf(sep.CharAt(0));
                 else return haystack.IndexOf(sep);
             }
             else
@@ -260,14 +260,14 @@ namespace Shaman.Runtime
                 //var charthere = haystack.Bytes[0];
                 //var fond = pCh;
 
-                for (int i = 0; i < haystack.Length; i++)
+                for (int i = 0; i < haystack.Length(); i++)
                 {
                     //byte thisChar = Unsafe.Add<byte>(ref pCh, i);
-                    byte thisChar = haystack[i];
+                    byte thisChar = haystack.CharAt(i);
 
                     if (ProbablyContains(charMap, thisChar))
                     {
-                        var substr = new Utf8String(haystack.Bytes.Slice(i));
+                        var substr = new Utf8Span(haystack.Bytes.Slice(i));
                         for (int j = 0; j < separator.Length; j++)
                         {
                             if (substr.StartsWith(separator[j]))
@@ -295,7 +295,7 @@ namespace Shaman.Runtime
                 int expected = -1;
                 for (int i = 0; i < haystack.Length; i++)
                 {
-                    var substr = new Utf8String(haystack.Bytes.Slice(i));
+                    var substr = new Utf8Span(haystack.Bytes.Slice(i));
                     for (int j = 0; j < separator.Length; j++)
                     {
                         if (substr.StartsWith(separator[j]))
@@ -388,7 +388,7 @@ namespace Shaman.Runtime
         {
             for (int i = 0; i < anyOf.Length; ++i)
             {
-                byte c = anyOf[i][0];
+                byte c = anyOf[i].CharAt(0);
 
                 var pos = c / 8;
                 var offset = c % 8;
@@ -416,7 +416,7 @@ namespace Shaman.Runtime
         }
 
 
-        public static unsafe int IndexOfAny(Utf8String str, byte[] anyOf)
+        public static unsafe int IndexOfAny(Utf8Span str, byte[] anyOf)
         {
             byte* charMap = stackalloc byte[32];
             InitializeProbabilisticMap(charMap, anyOf);
@@ -424,7 +424,7 @@ namespace Shaman.Runtime
 
             ref byte pCh = ref str.Bytes.DangerousGetPinnableReference();
 
-            for (int i = 0; i < str.Length; i++)
+            for (int i = 0; i < str.Length(); i++)
             {
                 byte thisChar = Unsafe.Add<byte>(ref pCh, i);
 
@@ -457,7 +457,7 @@ namespace Shaman.Runtime
             return -1;
         }
         /*
-        private static int ArrayContains(byte searchChar, Utf8String[] anyOf)
+        private static int ArrayContains(byte searchChar, Utf8Span[] anyOf)
         {
             for (int i = 0; i < anyOf.Length; i++)
             {

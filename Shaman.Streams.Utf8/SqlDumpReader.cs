@@ -48,11 +48,11 @@ namespace Shaman.Runtime
 
         bool isInInsert;
 
-        private Utf8String[] fields;
+        private StringSection[] fields = new StringSection[32];
         private Utf8String currentTableName;
         public Utf8String CurrentTableName => currentTableName;
 
-        public Utf8String[] TryReadRow(out int readfields)
+        public Utf8SpanArray TryReadRow(out int readfields)
         {
 
 
@@ -63,16 +63,16 @@ namespace Shaman.Runtime
                 if (s == 1 || s == 2) // )|` VALUES (
                 {
                     isInInsert = line.StartsWith(INSERT);
-                    currentTableName = Utf8String.Empty;
+                    currentTableName = null;
                     if (isInInsert)
                     {
                         if (line.TrySubstringFrom((byte)'`', out var p))
                         {
                             p = p.Substring(1);
                             if (p.TrySubstringTo((byte)'`', out var k))
-                                currentTableName = new Utf8String(k.CopyBytes());
+                                currentTableName = new Utf8String(k);
                             else
-                                currentTableName = new Utf8String(p.CopyBytes());
+                                currentTableName = new Utf8String(p);
 
                         }
                     }
@@ -90,10 +90,10 @@ namespace Shaman.Runtime
                 if (ms != null && ms.Length != 0)
                 {
                     ms.Write(line);
-                    line = new Utf8String(ms.Bytes);
+                    line = new Utf8Span(ms.Bytes);
                 }
 
-                readfields = TryReadSqlFields(ref fields, line, out endpos);
+                readfields = TryReadSqlFields(line, out endpos);
 
                 if (readfields == -1)
                 {
@@ -107,10 +107,13 @@ namespace Shaman.Runtime
                     continue;
                 }
                 ms?.Clear();
-                return fields;
+                Utf8SpanArray r = default(Utf8SpanArray);
+                r.boundaries = fields;
+                r.count = readfields;
+                r.data1 = line;
             }
             readfields = 0;
-            return fields;
+            return default(Utf8SpanArray);
         }
 
 
@@ -118,16 +121,16 @@ namespace Shaman.Runtime
 
 
 
-        private static int TryReadSqlFields(ref Utf8String[] fields, Utf8String input, out int endposition)
+        private int TryReadSqlFields(Utf8Span input, out int endposition)
         {
             var idx = 0;
             endposition = 0;
             while (true)
             {
-                if (input.Length == 0) break;
+                if (input.IsEmpty) break;
 
                 int end;
-                if (input[0] == (byte)'\'')
+                if (input.CharAt(0) == (byte)'\'')
                 {
                     end = EndOfQuotedString(input);
                     if (end == -1) return -1;
@@ -135,30 +138,30 @@ namespace Shaman.Runtime
                 else
                 {
                     end = input.IndexOf((byte)',');
-                    if (end == -1) end = input.Length;
+                    if (end == -1) end = input.Length();
                 }
 
-                if (fields == null) fields = new Utf8String[32];
-                else if (idx == fields.Length)
+                
+                if (idx == fields.Length)
                 {
                     var newsize = fields.Length * 2;
-                    var newarr = new Utf8String[newsize];
+                    var newarr = new StringSection[newsize];
 
-                    Array.Copy(fields, newarr, fields.Length);
+                    fields.AsSpan().CopyTo(newarr);
                     fields = newarr;
                 }
 
-                fields[idx] = input.Substring(0, end);
+                fields[idx] = new StringSection(0, end);
                 idx++;
                 endposition += end + 1;
-                if (end == input.Length) break;
+                if (end == input.Length()) break;
                 input = input.Substring(end + 1);
 
             }
             return idx;
         }
 
-        private static int EndOfQuotedString(Utf8String input)
+        private static int EndOfQuotedString(Utf8Span input)
         {
             var pos = 1;
             while (true)
@@ -170,7 +173,7 @@ namespace Shaman.Runtime
                 var precedingBackslashes = 0;
                 for (int i = end - 1; i >= 1; i--)
                 {
-                    if (input[i] == (byte)'\\')
+                    if (input.CharAt(i) == (byte)'\\')
                     {
                         precedingBackslashes++;
                     }
@@ -188,24 +191,24 @@ namespace Shaman.Runtime
         public Scratchpad Scratchpad => scratchpad;
 
 
-        public Utf8String UnescapeSql(Utf8String str)
+        public Utf8Span UnescapeSql(Utf8Span str)
         {
-            if (str[0] == (byte)'\'')
+            if (str.CharAt(0) == (byte)'\'')
             {
                 var slash = str.IndexOf((byte)'\\');
-                if (slash == -1) return str.Substring(1, str.Length - 2);
+                if (slash == -1) return str.Substring(1, str.Length() - 2);
                 else
                 {
-                    var output = scratchpad.Use(str.Length - 2);
-                    str.Substring(1, slash - 1).CopyTo(output);
+                    var output = scratchpad.Use(str.Length() - 2);
+                    str.Substring(1, slash - 1).Bytes.CopyTo(output);
                     var len = slash - 1;
-                    for (int i = slash; i < str.Length - 1; i++)
+                    for (int i = slash; i < str.Length() - 1; i++)
                     {
-                        var ch = str[i];
+                        var ch = str.CharAt(i);
                         if (ch == (byte)'\\')
                         {
                             i++;
-                            var next = str[i];
+                            var next = str.CharAt(i);
                             ch = UnescapeSqlSpecialChar(next);
                             output[len++] = ch;
                         }
@@ -214,7 +217,7 @@ namespace Shaman.Runtime
                             output[len++] = ch;
                         }
                     }
-                    return new Utf8String(output.Slice(0, len));
+                    return new Utf8Span(output.Slice(0, len));
                 }
             }
             else return str;

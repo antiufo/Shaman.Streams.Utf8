@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <VersionPrefix>1.0.0.16</VersionPrefix>
+    <VersionPrefix>1.0.0.17</VersionPrefix>
     <Authors>Andrea Martinelli</Authors>
-    <TargetFrameworks>net45;netstandard1.3</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
     <DefineConstants>$(DefineConstants);STANDALONE</DefineConstants>
     <AssemblyName>Shaman.Streams.Utf8</AssemblyName>
     <AssemblyOriginatorKeyFile>ShamanOpenSourceKey.snk</AssemblyOriginatorKeyFile>
@@ -11,8 +11,9 @@
     <PackageId>Shaman.Streams.Utf8</PackageId>
     <PackageIconUrl>http://shaman.io/images/shaman-nuget-icon.png</PackageIconUrl>
     <PackageProjectUrl>https://github.com/antiufo/Shaman.Streams.Utf8</PackageProjectUrl>
-    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <LangVersion>7.2</LangVersion>
     <Description>Utils for efficiently reading from streams of UTF8 text. Commonly used types: Utf8StreamReader, Utf8StreamWriter, CsvReader, SqlDumpReader, Utf8StringCache, Utf8StringExtensions, Utf8Utils, MemoryBuffer, Scratchpad.</Description>
   </PropertyGroup>
   <ItemGroup />
@@ -21,9 +22,9 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="System.Text.Primitives" Version="0.1.0-e170226-1" />
+    <PackageReference Include="System.Text.Utf8String" Version="0.1.0-e171101-2" />
   </ItemGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard1.3' ">
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
     <DefineConstants>$(DefineConstants);CORECLR</DefineConstants>
   </PropertyGroup>
 </Project>

@@ -24,40 +24,50 @@ namespace Shaman.Runtime
         }
 
 
-        private Utf8String[] arr = new Utf8String[10];
-        private Scratchpad scratchpad = new Scratchpad();
+        private StringSection[] arr = new StringSection[10];
+        private byte[] scratchpad = new byte[100];
 
 
         public string[] ReadHeader()
         {
-            return ReadLine().Select(x => x.ToString()).ToArray();
+            var l = ReadLine();
+            var arr = new string[l.Length];
+            for (int i = 0; i < l.Length; i++)
+            {
+                arr[i] = l[i].ToString();
+            }
+            return arr;
         }
         public byte Separator { get; set; } = (byte)',';
-        public Utf8String[] ReadLine()
+        public Utf8SpanArray ReadLine()
         {
-            if (reader.IsCompleted) return null;
-            var line = reader.ReadLine();
-            if (line.Length == 0) return null;
-            scratchpad.Reset();
-
+            if (reader.IsCompleted) return default(Utf8SpanArray);
+            var originalLine = new Utf8SpanWithIndex(reader.ReadLine(), 0);
+            if (originalLine.IsEmpty) return default(Utf8SpanArray);
+            var line = originalLine;
+            var scratchpadUsed = 0;
+            if (scratchpad.Length < line.Length)
+                scratchpad = new byte[Math.Min(line.Length, scratchpad.Length * 2)];
+            Utf8Span data2 = Utf8Span.Empty;
             var num = 0;
             while (true)
             {
-                var idx = line.IndexOf(Separator);
+                var idx = line.Span.IndexOf(Separator);
                 var val = idx == -1 ? line : line.Substring(0, idx);
 
-                if (val.Length > 0 && val[0] == (byte)'"')
+                if (!val.IsEmpty && val.Span.CharAt(0) == (byte)'"')
                 {
                     val = line.Substring(1);
                     var mustUnescapeQuotes = false;
                     int quotidx = 0;
                     while (true)
                     {
-                        quotidx = val.IndexOf((byte)'"', quotidx);
+                        var k = val.Span.Bytes.Slice(quotidx).IndexOf((byte)'"');
                         if (quotidx == -1) throw new InvalidDataException();
+                        quotidx += k;
                         if (quotidx + 1 < val.Length)
                         {
-                            if (val[quotidx + 1] == (byte)'"')
+                            if (val.Span.CharAt(quotidx + 1) == (byte)'"')
                             {
                                 quotidx += 2;
                                 mustUnescapeQuotes = true;
@@ -70,49 +80,51 @@ namespace Shaman.Runtime
                     }
                     if (mustUnescapeQuotes)
                     {
-                        var p = scratchpad.Use(val.Length);
                         var len = 0;
-                        var view = new Utf8String(p);
+                        var p = scratchpad.Slice(scratchpadUsed);
                         while (true)
                         {
-                            var pos = val.IndexOf((byte)'"');
+                            var pos = val.Span.IndexOf((byte)'"');
                             if (pos == -1) break;
-                            val.Substring(0, pos).CopyTo(p.Slice(len));
+                            val.Substring(0, pos).Span.Bytes.CopyTo(p.Slice(len));
                             val = val.Substring(pos + 2);
                             len += pos;
                             p[len] = (byte)'"';
                             len++;
                         }
-                        val.CopyTo(p.Slice(len));
+                        val.Span.Bytes.CopyTo(p.Slice(len));
                         len += val.Length;
-                        val = new Utf8String(p.Slice(0, len));
+                        arr[num] = new StringSection(scratchpadUsed, -len);
+                        scratchpadUsed += len;
+                    }
+                    else
+                    {
+                        arr[num] = new StringSection(val.Index, val.Length);
                     }
                 }
                 else
                 {
                     line = line.Substring(idx + 1);
+                    arr[num] = new StringSection(val.Index, val.Length);
                 }
 
                 if (arr.Length == num)
                     Array.Resize(ref arr, arr.Length * 2);
-                arr[num] = val;
                 num++;
                 if (idx == -1) break;
             }
 
-            if (arr.Length != num)
-            {
-                var b = new Utf8String[num];
-                arr.Slice(0, num).CopyTo(b);
-                arr = b;
-            }
-
-            return arr;
+            Utf8SpanArray result = default(Utf8SpanArray);
+            result.count = num;
+            result.data1 = originalLine.Span;
+            result.data2 = new Utf8Span(scratchpad);
+            result.boundaries = arr;
+            return result;
         }
 
         public void Dispose()
         {
-            scratchpad.Dispose();
+            scratchpad = null;
             reader.Dispose();
         }
 

@@ -23,14 +23,14 @@ namespace Shaman.Runtime
 
 
 
-        public static string ToStringCached(this Utf8String utf8)
+        public static string ToStringCached(this Utf8Span utf8)
         {
-            if (utf8.Length == 0)
+            if (utf8.IsEmpty)
             {
                 return string.Empty;
             }
-            var utf8length = utf8.Length;
-            int hash = CalculateHash(utf8[0], utf8[utf8length / 2], utf8[utf8length - 1], utf8length);
+            var utf8length = utf8.Length();
+            int hash = CalculateHash(utf8.CharAt(0), utf8.CharAt(utf8length / 2), utf8.CharAt(utf8length - 1), utf8length);
             if (cache == null)
             {
                 cache = new CacheSlot[6841];
@@ -44,7 +44,7 @@ namespace Shaman.Runtime
             {
                 var entry = list[i];
                 if (entry.String == null) break;
-                if (entry.Span.BlockEquals(utf8.Bytes)) return entry.String;
+                if (entry.Span.SequenceEqual(utf8.Bytes)) return entry.String;
             }
 
             lock (lockObj)
@@ -55,7 +55,7 @@ namespace Shaman.Runtime
 
                 if (usedScratchpadBytes + utf8length <= scratchpad.Length)
                 {
-                    utf8.CopyTo(scratchpad.Slice(usedScratchpadBytes));
+                    utf8.Bytes.CopyTo(scratchpad.Slice(usedScratchpadBytes));
                     entry.Bytes = scratchpad;
                     entry.Offset = usedScratchpadBytes;
                     usedScratchpadBytes += utf8length;
@@ -63,7 +63,7 @@ namespace Shaman.Runtime
                 else
                 {
                     scratchpad = new byte[Math.Max(scratchpad.Length, utf8length * 2)];
-                    utf8.CopyTo(scratchpad);
+                    utf8.Bytes.CopyTo(scratchpad);
                     entry.Bytes = scratchpad;
                     entry.Offset = 0;
                     usedScratchpadBytes = utf8length;

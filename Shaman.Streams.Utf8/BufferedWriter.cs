@@ -74,7 +74,7 @@ namespace Shaman.Runtime
                 }
                 else
                 {
-                    var remaining = str.Slice();
+                    var remaining = str.AsReadOnlySpan();
                     while(remaining.Length != 0)
                     {
                         var tocopy = Math.Min(remaining.Length, bufferSize);

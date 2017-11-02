@@ -72,10 +72,10 @@ namespace Shaman.Runtime
             return slice;
         }
 
-        public Utf8String Copy(Utf8String source)
+        public Utf8String Copy(Utf8Span source)
         {
-            var v = Use(source.Length);
-            source.CopyTo(v);
+            var v = Use(source.Length());
+            source.Bytes.CopyTo(v);
             return new Utf8String(v);
         }
         public Span<byte> Copy(ReadOnlySpan<byte> source)
