@@ -21,10 +21,31 @@ namespace Shaman.Runtime
             get
             {
                 var b = boundaries[index];
-                if (b.Length < 0) return data2.Substring(b.Start, -b.Length);
-                return data1.Substring(b.Start, b.Length);
+                if (b.Length < 0) return data2.SubstringRaw(b.Start, -b.Length);
+                return data1.SubstringRaw(b.Start, b.Length);
             }
         }
+
+        public string[] ToStringArray()
+        {
+            var arr = new string[this.count];
+            for (int i = 0; i < arr.Length; i++)
+            {
+                arr[i] = this[i].ToString();
+            }
+            return arr;
+        }
+        public Utf8String[] ToUtf8StringArray()
+        {
+            var arr = new Utf8String[this.count];
+            for (int i = 0; i < arr.Length; i++)
+            {
+                arr[i] = new Utf8String(this[i]);
+            }
+            return arr;
+        }
+
+        public string[] AsStringArray => ToStringArray();
 
         internal void Add(int pos, int length)
         {
@@ -43,6 +64,7 @@ namespace Shaman.Runtime
             count++;
         }
 
+        
     }
 
     internal struct StringSection
@@ -68,14 +90,14 @@ namespace Shaman.Runtime
         }
 
 
-        public Utf8SpanWithIndex Substring(int start, int length)
+        public Utf8SpanWithIndex SubstringRaw(int start, int length)
         {
-            return new Utf8SpanWithIndex(Span.Substring(start, length), this.Index + start);
+            return new Utf8SpanWithIndex(Span.SubstringRaw(start, length), this.Index + start);
         }
 
-        public Utf8SpanWithIndex Substring(int start)
+        public Utf8SpanWithIndex SubstringRaw(int start)
         {
-            return new Utf8SpanWithIndex(Span.Substring(start), this.Index + start);
+            return new Utf8SpanWithIndex(Span.SubstringRaw(start), this.Index + start);
         }
 
         public bool IsEmpty => Span.IsEmpty;
