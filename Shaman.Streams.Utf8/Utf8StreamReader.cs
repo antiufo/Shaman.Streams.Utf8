@@ -67,7 +67,7 @@ namespace Shaman.Runtime
             int dummy;
             var line = ReadTo(LF, out dummy);
             if (!line.IsEmpty && line.CharAt(line.Length() - 1) == 13)
-                line = line.Substring(0, line.Length() - 1);
+                line = line.SubstringRaw(0, line.Length() - 1);
             return line;
         }
 
@@ -243,8 +243,8 @@ namespace Shaman.Runtime
             if (separator.Length == 1)
             {
                 var sep = separator[0];
-                if (sep.Length() == 1) return haystack.IndexOf(sep.CharAt(0));
-                else return haystack.IndexOf(sep);
+                if (sep.Length() == 1) return haystack.IndexOfRaw(sep.CharAt(0));
+                else return haystack.IndexOfRaw(sep);
             }
             else
             {
