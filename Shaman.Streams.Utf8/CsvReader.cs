@@ -52,12 +52,12 @@ namespace Shaman.Runtime
             var num = 0;
             while (true)
             {
-                var idx = line.Span.IndexOf(Separator);
-                var val = idx == -1 ? line : line.Substring(0, idx);
+                var idx = line.Span.IndexOfRaw(Separator);
+                var val = idx == -1 ? line : line.SubstringRaw(0, idx);
 
                 if (!val.IsEmpty && val.Span.CharAt(0) == (byte)'"')
                 {
-                    val = line.Substring(1);
+                    val = line.SubstringRaw(1);
                     var mustUnescapeQuotes = false;
                     int quotidx = 0;
                     while (true)
@@ -74,8 +74,8 @@ namespace Shaman.Runtime
                                 continue;
                             }
                         }
-                        line = val.Substring(quotidx + 2);
-                        val = val.Substring(0, quotidx);
+                        line = val.SubstringRaw(quotidx + 2);
+                        val = val.SubstringRaw(0, quotidx);
                         break;
                     }
                     if (mustUnescapeQuotes)
@@ -84,10 +84,10 @@ namespace Shaman.Runtime
                         var p = scratchpad.Slice(scratchpadUsed);
                         while (true)
                         {
-                            var pos = val.Span.IndexOf((byte)'"');
+                            var pos = val.Span.IndexOfRaw((byte)'"');
                             if (pos == -1) break;
-                            val.Substring(0, pos).Span.Bytes.CopyTo(p.Slice(len));
-                            val = val.Substring(pos + 2);
+                            val.SubstringRaw(0, pos).Span.Bytes.CopyTo(p.Slice(len));
+                            val = val.SubstringRaw(pos + 2);
                             len += pos;
                             p[len] = (byte)'"';
                             len++;
@@ -104,7 +104,7 @@ namespace Shaman.Runtime
                 }
                 else
                 {
-                    line = line.Substring(idx + 1);
+                    line = line.SubstringRaw(idx + 1);
                     arr[num] = new StringSection(val.Index, val.Length);
                 }
 
