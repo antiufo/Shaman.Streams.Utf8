@@ -104,3 +104,4 @@ For similar methods for `string`s, see [https://github.com/antiufo/Shaman.Common
 * `ParseDateConcatenated` (eg. `yyyyMMddHHmmss`)
 * `ParseDateSeparated` (eg. `yyyy-MM-dd HH:mm:ss`)
 * `Utf8String ReadTo(ref Utf8String str, byte end)`
+
